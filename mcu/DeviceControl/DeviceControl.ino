@@ -80,7 +80,7 @@ Robojax_L298N_DC_motor motor(IN1, IN2, ENA, CHA, true);
 #define CHARACTERISTIC_UUID_RX "19d8d9e0-7d45-430e-aa67-2f4169eb2e22" // 接收特征值UUID
 #define CHARACTERISTIC_UUID_TX "7ee6c5c4-dbb2-4981-8e22-700846a4f83f" // 发送特征值UUID
 #define CHARACTERISTIC_UUID_RETX "e1841616-4da8-4ea8-8407-ac1d2439ef51" // 读取特征值UUID
-#define DEVICE_UUID "5A:1B:A6:3D:8A" // 设备唯一ID
+#define DEVICE_UUID "E0:5A:1B:A6:3D:56" // 设备唯一ID
 //-------------------------------------------------------------------------------------------------
 
 // BLE服务器回调类，处理连接和断开事件
@@ -102,7 +102,7 @@ class MyServerCallbacks : public BLEServerCallbacks
 // 定义WebSocket相关变量
 #define USE_SERIAL Serial     // 使用Serial作为调试输出
 #define DEBUG_ESP_PORT Serial // 调试端口
-#define WS_SERVER "192.168.115.71" // WebSocket服务器地址
+#define WS_SERVER "192.168.237.136" // WebSocket服务器地址
 #define WS_PORT 5000          // WebSocket服务器端口
 #define WS_SSID "mi"   // WiFi名称
 #define WS_PASSWORD "2575963156A" // WiFi密码
@@ -681,7 +681,7 @@ void setup()
     Serial.println("DHT11 sensor initialized");
 
     // 创建BLE设备
-    BLEDevice::init("莳山纯情男大");
+    BLEDevice::init("铜锣湾扛把子");
 
     // 创建BLE服务器
     pServer = BLEDevice::createServer();
