@@ -30,6 +30,8 @@
 #include <WiFiClientSecure.h> // 安全WiFi客户端库
 #include <WebSocketsClient_Generic.h> // WebSocket客户端库
 #include <DHT.h>              // DHT温湿度传感器库
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 // DHT11传感器定义
 #define DHTPIN 33             // DHT11连接到GPIO33 (D33)
@@ -73,6 +75,19 @@ const int CW = 1;             // 顺时针旋转
 // 创建电机对象，true表示启用串口调试
 Robojax_L298N_DC_motor motor(IN1, IN2, ENA, CHA, true);
 //-------------------------------------------------------------------------------------------------
+//设置屏幕输出
+// 屏幕尺寸设置 - 0.91寸OLED通常是128x32
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 32
+#define OLED_RESET -1  // 无复位引脚
+// 自定义I2C引脚
+#define I2C_SDA 18  // D18引脚 (GPIO18)
+#define I2C_SCL 19   // D19引脚 (GPIO19)
+
+// 创建SSD1306显示对象 (I2C地址0x3C)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//-------------------------------------------------------------------------------------------------
 
 // UUID定义，用于BLE服务和特征值
 // 可以在 https://www.uuidgenerator.net/ 生成UUID
@@ -80,7 +95,7 @@ Robojax_L298N_DC_motor motor(IN1, IN2, ENA, CHA, true);
 #define CHARACTERISTIC_UUID_RX "19d8d9e0-7d45-430e-aa67-2f4169eb2e22" // 接收特征值UUID
 #define CHARACTERISTIC_UUID_TX "7ee6c5c4-dbb2-4981-8e22-700846a4f83f" // 发送特征值UUID
 #define CHARACTERISTIC_UUID_RETX "e1841616-4da8-4ea8-8407-ac1d2439ef51" // 读取特征值UUID
-#define DEVICE_UUID "E0:5A:1B:A6:3D:56" // 设备唯一ID
+#define DEVICE_UUID "5A:1B:A6:3D:8A" // 设备唯一ID
 //-------------------------------------------------------------------------------------------------
 
 // BLE服务器回调类，处理连接和断开事件
@@ -102,7 +117,7 @@ class MyServerCallbacks : public BLEServerCallbacks
 // 定义WebSocket相关变量
 #define USE_SERIAL Serial     // 使用Serial作为调试输出
 #define DEBUG_ESP_PORT Serial // 调试端口
-#define WS_SERVER "192.168.237.136" // WebSocket服务器地址
+#define WS_SERVER "192.168.115.71" // WebSocket服务器地址
 #define WS_PORT 5000          // WebSocket服务器端口
 #define WS_SSID "mi"   // WiFi名称
 #define WS_PASSWORD "2575963156A" // WiFi密码
@@ -339,6 +354,30 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
       break;
     }
 }
+
+//-------------------------------------------------------------------------------------------------
+// 显示风扇挡位和转速的函数
+typedef struct {
+  int gear;   // 挡位
+  int speed;  // 转速
+} FanStatus;
+FanStatus currentFanStatus = {0, 0};
+void showFanStatus(int gear, int speed) {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.print("gear:");
+  display.println(gear);
+  display.setCursor(0, 20);
+  display.print("speed:");
+  display.println(speed);
+  display.display();
+  currentFanStatus.gear = gear;
+  currentFanStatus.speed = speed;
+}
+
+
 //-------------------------------------------------------------------------------------------------
 // 处理通过WiFi/WebSocket接收到的命令
 void WIFI_Command()
@@ -360,6 +399,7 @@ void WIFI_Command()
         fanAutoControl = true; // 开启风扇时自动启用湿度控制
         manualFanOff = false; // 重置手动关闭标志
         Serial.println("Humidity control enabled");
+        showFanStatus(1, 10);
         /*开电扇*/
       }
       else
@@ -369,6 +409,7 @@ void WIFI_Command()
         motor.brake(1);
         fanAutoControl = false; // 关闭风扇时禁用湿度控制
         manualFanOff = true; // 设置手动关闭标志
+        showFanStatus(0, 0);
         /*关电扇*/
       }
     }
@@ -385,18 +426,21 @@ void WIFI_Command()
         // 1档速度
         Serial.println("1 Gear");
         motor.rotate(motor1, 40, CCW);
+        showFanStatus(1, 40);
       }
       else if (speed == 2)
       {
         // 2档速度
         Serial.println("2 Gear");
         motor.rotate(motor1, 70, CCW);
+        showFanStatus(2, 70);
       }
       else if (speed == 3)
       {
         // 3档速度
         Serial.println("3 Gear");
         motor.rotate(motor1, 100, CCW);
+        showFanStatus(3, 100);
       }
       else
       {
@@ -448,22 +492,26 @@ void checkHumidityAndControlFan()
           Serial.println("Auto: fan turned off (humidity below threshold)");
           method = false; // 更新风扇状态为关闭
           motor.brake(1); // 关闭风扇
+          showFanStatus(0, 0);
         }
       } else if (humidity > humidityThreshold && humidity <= humidityThreshold + 10) {
         // 湿度略高于阈值，开启1档风扇
         Serial.println("Auto: fan set to speed 1 (low humidity)");
         method = true; // 更新风扇状态为开启
         motor.rotate(motor1, 30, CCW); // 1档速度
+        showFanStatus(1, 30);
       } else if (humidity > humidityThreshold + 10 && humidity <= humidityThreshold + 20) {
         // 湿度中等，开启2档风扇
         Serial.println("Auto: fan set to speed 2 (medium humidity)");
         method = true; // 更新风扇状态为开启
-        motor.rotate(motor1, 75, CCW); // 2档速度
+        motor.rotate(motor1, 70, CCW); // 2档速度
+        showFanStatus(2, 70);
       } else if (humidity > humidityThreshold + 20) {
         // 湿度很高，开启3档风扇
         Serial.println("Auto: fan set to speed 3 (high humidity)");
         method = true; // 更新风扇状态为开启
         motor.rotate(motor1, 100, CCW); // 3档速度
+        showFanStatus(3, 100);
       }
     }
   }
@@ -550,6 +598,7 @@ void BLE_command()
       fanAutoControl = true; // 开启风扇时自动启用湿度控制
       manualFanOff = false; // 重置手动关闭标志
       Serial.println("Humidity control enabled");
+      showFanStatus(1, 10);
       /*开电扇*/
     }
     else
@@ -559,6 +608,7 @@ void BLE_command()
       motor.brake(1);
       fanAutoControl = false; // 关闭风扇时禁用湿度控制
       manualFanOff = true; // 设置手动关闭标志
+      showFanStatus(0, 0);
       /*关电扇*/
     }
   }
@@ -572,18 +622,21 @@ void BLE_command()
       // 1档速度
       Serial.println("1 gear");
       motor.rotate(motor1, 30, CCW);
+      showFanStatus(1,30);
     }
     else if (speed == 2)
     {
       // 2档速度
       Serial.println("2 gear");
-      motor.rotate(motor1, 75, CCW);
+      motor.rotate(motor1, 70, CCW);
+      showFanStatus(2, 70);
     }
     else if (speed == 3)
     {
       // 3档速度
       Serial.println("3 gear");
       motor.rotate(motor1, 100, CCW);
+      showFanStatus(3, 100);
     }
     else
     {
@@ -594,6 +647,8 @@ void BLE_command()
   break;
  }
 }
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 // 连接WiFi并建立WebSocket连接
 void connectWIFI()
@@ -680,8 +735,11 @@ void setup()
     dht.begin();
     Serial.println("DHT11 sensor initialized");
 
+    // 初始化I2C总线使用自定义引脚
+    Wire.begin(I2C_SDA, I2C_SCL);
+
     // 创建BLE设备
-    BLEDevice::init("铜锣湾扛把子");
+    BLEDevice::init("莳山纯情男大");
 
     // 创建BLE服务器
     pServer = BLEDevice::createServer();
@@ -722,6 +780,19 @@ void setup()
     }else{
         reTxCharacteristic->setValue("WIFI Connected");
     }
+     // 初始化OLED屏幕
+    if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+      Serial.println(F("SSD1306 allocation failed"));
+      for(;;);
+    }
+    display.clearDisplay();   //清楚内容
+    display.setTextSize(2);   //字体
+    display.setTextColor(SSD1306_WHITE);  //颜色
+    display.setCursor(0,0);  //坐标
+    display.println("fan ready");
+    display.display();
+    delay(1);
+    display.clearDisplay();
 }
 
 // 主循环
